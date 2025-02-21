@@ -56,6 +56,8 @@ graph TD;
   - **Cost Management Reader** role
   - **Virtual Machine Contributor** role
   - **Monitoring Reader** role
+- **Groq API Key** for using the Groq API for AI agent interactions.
+- **Azure Subscription ID, Tenant ID, Client ID, and Client Secret.**
 
 ### Steps
 1. Clone the repository:
@@ -68,7 +70,7 @@ graph TD;
    pip install -r requirements.txt
    ```
 3. Set up environment variables:
-   - Copy `.env.example` to `.env` and fill in the required Azure credentials.
+   - Copy `.env.example` to `.env` and fill in the required Azure credentials and Groq API key.
 
 4. Run the optimizer:
    ```bash
@@ -101,9 +103,10 @@ Azure Cost Optimization Agent System/
 - `autogen`: Framework for creating AI agents that automate tasks.
 - `datetime`: Handle dates for filtering cost data.
 - `shutil`: File operations for saving reports.
+- `groq`: For interacting with the Groq API for AI agent interactions.
 
 ## Main Steps in the Code
-1. Load environment variables for Azure credentials.
+1. Load environment variables for Azure credentials and Groq API key.
 2. Authenticate with Azure.
 3. Fetch Azure cost data via API.
 4. Check VM CPU usage using SSH or Azure metrics.
@@ -112,10 +115,25 @@ Azure Cost Optimization Agent System/
 7. Generate cost reports using `pandas`.
 8. Use AutoGen agents to automate the monitoring, scaling, and reporting process.
 
+## Agentic AI Pattern
+### Pattern Used: Multi-Agent Collaboration
+This project employs a multi-agent collaboration pattern using Microsoft AutoGen. The system is divided into three specialized agents:
+
+- **Monitoring Agent**: Responsible for collecting and analyzing cost data.
+- **Cost Optimizer Agent**: Manages the scaling of underutilized resources.
+- **Reporting Agent**: Generates and saves cost reports.
+
+### Benefits of Using Multi-Agent Collaboration
+- **Specialization**: Each agent is specialized in a specific task, leading to more efficient and accurate operations.
+- **Scalability**: The system can easily be extended by adding more agents for additional tasks.
+- **Fault Tolerance**: If one agent fails, the others can continue to operate, ensuring system resilience.
+- **Automation**: The agents can work autonomously, reducing the need for manual intervention.
+
 ## Tutorials
 - [Azure Cost Management API Documentation](https://learn.microsoft.com/en-us/azure/cost-management-billing/cost-management-data-api-overview)
 - [Microsoft AutoGen Framework](https://microsoft.github.io/autogen/)
 - [Working with Azure Identity SDK](https://learn.microsoft.com/en-us/python/api/overview/azure/identity)
+- [Groq API Documentation](https://groq.com/docs)
 
 ## Contributing
 Contributions are welcome! Please open an issue or submit a pull request for any improvements or bug fixes.
