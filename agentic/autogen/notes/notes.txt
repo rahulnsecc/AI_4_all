@@ -1,1 +1,5 @@
- git status
+git status
+git add .
+git commit -m "Describe your changes here"
+git remote -v
+git push origin main
