@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Azure Cost Optimization Report</title>
+    <style>
+        :root {
+            --primary-color: #2b6cb0;
+            --bg-color: #f7fafc;
+            --success-bg: #f0fff4;
+            --success-text: #2f855a;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            background: #f9fafb;
+            margin: 0;
+            padding: 15px;
+            height: 100vh;
+            overflow: hidden;
+            color: #2d3748;
+        }
+
+        .container {
+            height: calc(100vh - 30px);
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 10px;
+            border-radius: 16px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+            display: grid;
+            grid-template: auto auto 1fr / 1fr 1fr;
+            gap: 10px;
+            overflow: auto;
+        }
+
+        h1, h2 { color: var(--primary-color); margin: 0; }
+        h1 { font-size: 1rem; text-align: center; padding: 10px; position: sticky; top: 0; background: white; z-index: 1; grid-column: 1/-1; }
+        h2 { font-size: 1.1rem; padding-bottom: 6px; border-bottom: 2px solid #e2e8f0; margin-bottom: 12px; }
+
+        .section {
+            background: var(--bg-color);
+            padding: 10px;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            font-size: 0.85rem;
+            border-radius: 8px;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.05);
+        }
+        th, td { padding: 8px 10px; text-align: left; }
+        th { background: var(--primary-color); color: white; }
+        tr:nth-child(even) { background: #f8fafc; }
+
+        .actions ul { padding: 0; margin: 0; list-style: none; font-size: 0.85rem; }
+        .actions li {
+            padding: 8px;
+            margin: 6px 0;
+            background: #ebf8ff;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status {
+            padding: 8px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--success-bg);
+            color: var(--success-text);
+            border: 1px solid #c6f6d5;
+        }
+
+        .image-container {
+            grid-column: 1/-1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .graph img, .screenshot img {
+            width: 100%;
+            height: 200px;
+            object-fit: contain;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+        img:hover { transform: scale(1.03); }
+
+        .icon { width: 16px; height: 16px; }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal.open { display: flex; }
+        .modal-content { max-width: 90%; max-height: 90%; background: white; border-radius: 12px; }
+        .modal img { width: 100%; height: 100%; object-fit: contain; }
+        .close-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            cursor: pointer;
+            font-size: 1.2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Azure Cost Optimization Report</h1>
+        
+        <div class="section">
+            <h2>Cost Report</h2>
+            <table>
+                <thead><tr><th>Resource</th><th>Cost (USD)</th></tr></thead>
+                <tbody>
+                    <tr><td>01lang-asng2iqqmzmhwz2</td><td>0.0</td></tr>
+                    <tr><td>01openAI01</td><td>0.0</td></tr>
+                    <tr><td>Vm001_OsDisk_1_115fa8c71dd9481d9fb7086271e925c7</td><td>0.0</td></tr>
+                    <tr><td>vm001</td><td>0.0</td></tr>
+                    <tr><td>Vm001</td><td>0.0</td></tr>
+                    <tr><td>vm001-ip</td><td>0.0</td></tr>
+                    <tr><td>networkwatcher_westus2</td><td>0.0</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section">
+            <h2>Actions Taken</h2>
+            <div class="actions">
+                <ul>
+                    <li><svg class="icon" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg>Fetched Azure cost data</li>
+                    <li><svg class="icon" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg>Analyzed VM utilization</li>
+                    <li><svg class="icon" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg>Scaled down VM: vm001</li>
+                    <li><svg class="icon" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg>Generated cost report</li>
+                </ul>
+            </div>
+            <h2 style="margin-top:15px">Status</h2>
+            <div class="status">
+                <svg class="icon" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg>
+                Successfully scaled down VM: vm001
+            </div>
+        </div>
+
+        <div class="image-container">
+            <div class="graph"><h2>System Design</h2><img src="optimizer1.png" onclick="openModal('optimizer1.png')"></div>
+            <div class="screenshot"><h2>VM Screenshot</h2><img src="azure_VM.png" onclick="openModal('azure_VM.png')"></div>
+        </div>
+    </div>
+
+    <div class="modal" id="imageModal">
+        <div class="modal-content"><img id="modalImage"></div>
+        <button class="close-btn" onclick="closeModal()">&times;</button>
+    </div>
+
+    <script>
+        const modal = document.getElementById('imageModal');
+        const modalImage = document.getElementById('modalImage');
+
+        const openModal = src => {
+            modalImage.src = src;
+            modal.classList.add('open');
+        };
+        const closeModal = () => modal.classList.remove('open');
+        
+        document.addEventListener('keydown', e => e.key === 'Escape' && closeModal());
+        modal.addEventListener('click', e => e.target === modal && closeModal());
+    </script>
+</body>
+</html>

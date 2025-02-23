@@ -13,15 +13,30 @@ This project is an AI-powered SQL query analysis system that leverages multiple 
 
 ## System Design
 ```mermaid
+
 graph TD;
-    A[User Input] -->|SQL Query| B[SQL Validator Agent];
-    B -->|Validated Query| C[Execution Plan Analyzer Agent];
-    C -->|Execution Plan| D[Data Profiler Agent];
-    D -->|Profiling Results| E[Consolidated Report];
-    F[Error Analyzer Agent] -->|Error Diagnosis| E;
-    B -->|Validation Errors| F;
-    C -->|Execution Errors| F;
-    D -->|Profiling Errors| F;
+    style A fill:#4CAF50,color:#ffffff,stroke:#388E3C,stroke-width:2px;
+    style B fill:#2196F3,color:#ffffff,stroke:#1976D2,stroke-width:2px;
+    style C fill:#FF9800,color:#ffffff,stroke:#F57C00,stroke-width:2px;
+    style D fill:#607D8B,color:#ffffff,stroke:#455A64,stroke-width:2px;
+    style E fill:#9C27B0,color:#ffffff,stroke:#7B1FA2,stroke-width:2px;
+    style F fill:#E91E63,color:#ffffff,stroke:#C2185B,stroke-width:2px;
+    style G fill:#009688,color:#ffffff,stroke:#00796B,stroke-width:2px;
+
+    A[User] -->|1 Input SQL Query| B[Streamlit UI];
+    B -->|2 Send Query| C[SQLDebugger];
+    C -->|3 Execute Query| D[(Database)];
+    D -->|4 Return Result/Error| C;
+    C -->|5 Log Error| E[DebuggingSession];
+    C -->|6 Send Error| F[UserProxyAgent];
+    F -->|7 Analyze Error| G[AssistantAgent];
+    G -->|8 Propose Solution| F;
+    F -->|9 Validate Solution| D;
+    D -->|10 Return Validation Result| F;
+    F -->|11 Update Session| E;
+    E -->|12 Control Flow| C;
+    C -->|13 Display Result| B;
+    B -->|14 Show Output| A;
 ```
 
 ## Components

@@ -13,17 +13,22 @@ This project is an automated system for monitoring Azure costs, identifying unde
 ## System Design
 ```mermaid
 graph TD;
-    A[Monitoring Agent] -->|Collects data| B[Cost Optimizer Agent];
-    B -->|Scales resources| C[Reporting Agent];
-    C -->|Generates report| D[User];
+    style UserProxy fill:#4CAF50,color:#ffffff,stroke:#388E3C,stroke-width:2px;
+    style MonitoringAgent fill:#2196F3,color:#ffffff,stroke:#1976D2,stroke-width:2px;
+    style CostOptimizerAgent fill:#FF9800,color:#ffffff,stroke:#F57C00,stroke-width:2px;
+    style ReportingAgent fill:#9C27B0,color:#ffffff,stroke:#7B1FA2,stroke-width:2px;
+    style AzureCloud fill:#607D8B,color:#ffffff,stroke:#455A64,stroke-width:2px;
 
-    subgraph Azure Cloud
-        E[Cost Management API];
-        F[Virtual Machines];
-    end
-
-    A --> E;
-    B --> F;
+    UserProxy[User Proxy] -->|1 Initiates Workflow| MonitoringAgent[Monitoring Agent];
+    MonitoringAgent -->|2 Fetches Cost Data| AzureCloud[(Azure Cloud)];
+    AzureCloud -->|3 Returns Cost Data| MonitoringAgent;
+    MonitoringAgent -->|4 Analyzes VM Utilization| CostOptimizerAgent[Cost Optimizer Agent];
+    CostOptimizerAgent -->|5 Scales Underutilized VMs| AzureCloud;
+    AzureCloud -->|6 Confirms Scaling| CostOptimizerAgent;
+    CostOptimizerAgent -->|7 Requests Report Generation| ReportingAgent[Reporting Agent];
+    ReportingAgent -->|8 Generates Cost Report| AzureCloud;
+    AzureCloud -->|9 Returns Report Data| ReportingAgent;
+    ReportingAgent -->|10 Saves Report Locally| UserProxy;
 ```
 
 ## Components
