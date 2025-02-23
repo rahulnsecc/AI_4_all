@@ -1,348 +1,176 @@
-# sql_analyzer.py
 import streamlit as st
-from autogen.agentchat import AssistantAgent, UserProxyAgent
-import mysql.connector
-import pandas as pd
-from dotenv import load_dotenv
+from autogen import AssistantAgent, UserProxyAgent
+import sqlalchemy
+from sqlalchemy import create_engine, text
+import json
+import re
 import os
-import time
-import logging
-from typing import Optional, Dict, Any
+from dotenv import load_dotenv
+from typing import Dict, Any
 
-# Configure logging and environment
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    filename="sql_debugging.log",
-    filemode="a",
-)
-logger = logging.getLogger(__name__)
-load_dotenv('.env')
+# Load environment variables first
+load_dotenv()
 
-# Configuration
-llm_config = {
-    "config_list": [{
-        "model": "llama-3.3-70b-versatile",
-        "api_key": os.getenv("GROQ_API_KEY"),
-        "api_type": "groq",
-    }],
-    "timeout": 120,
-    "temperature": 0.1
-}
+def create_engine():
+    """Create database connection engine"""
+    return sqlalchemy.create_engine(
+        f"mysql+mysqlconnector://"
+        f"{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}"
+        f"@{os.getenv('DB_HOST')}/{os.getenv('DB_NAME')}"
+    )
 
-class SQLAnalysisSystem:
+class DebuggingSession:
+    """Optimized session management with token control"""
+    def __init__(self, engine):
+        self.engine = engine
+        self.history = []
+        self.current_step = 0
+        self.resolved = False
+        
+    def add_interaction(self, role: str, content: str):
+        # Keep only last 3 interactions to limit context size
+        if len(self.history) >= 3:
+            self.history.pop(0)
+        self.history.append({"role": role, "content": content})
+        
+    def should_continue(self, last_response: str) -> bool:
+        if self.resolved or self.current_step >= 3:
+            return False
+        self.current_step += 1
+        
+        # Check for resolution indicators
+        resolution_phrases = [
+            "final solution",
+            "error resolved",
+            "successfully executed",
+            "issue fixed"
+        ]
+        return not any(phrase in last_response.lower() for phrase in resolution_phrases)
+
+class SQLDebugger:
     def __init__(self):
-        # Initialize User Proxy Agent with tool registration
-        self.user_proxy = UserProxyAgent(
-            name="Admin",
-            human_input_mode="NEVER",
-            code_execution_config=False,
-            system_message="Coordinator for SQL analysis tasks. Maintain conversation flow and ensure final output delivery."
-        )
+        self.engine = create_engine()
+        self.session = DebuggingSession(self.engine)
         
-        # Initialize specialized agents with ReAct capabilities
-        self._init_agents()
-        # Register all database operations as tools
-        self._register_tools()
-        # Store conversation state
-        self.conversation_state = {}
-
-    def analyze_query(self, query: str, session_state) -> dict:
-        """Main analysis workflow using ReAct planning"""
-        result = {
-            "reports": [],
-            "errors": []
-        }
-
-        try:
-            # Start conversation with validation
-            self.user_proxy.initiate_chat(
-                self.validator,
-                message=f"Full analysis for:\n```sql\n{query}\n```",
-                clear_history=False
-            )
-            
-            # Collect intermediate results
-            val_result = self._process_chat(self.validator)
-            if val_result["status"] == "success":
-                result["reports"].append(val_result)
-                
-                # Continue conversation with execution plan analysis
-                self._continue_chat(self.plan_analyzer, query)
-                plan_result = self._process_chat(self.plan_analyzer)
-                result["reports"].append(plan_result)
-                
-                # Continue with data profiling
-                self._continue_chat(self.data_profiler, query)
-                profile_result = self._process_chat(self.data_profiler)
-                result["reports"].append(profile_result)
-                
-                # Finalize conversation
-                self.user_proxy.send(
-                    {"role": "user", "content": "Finalize analysis and present consolidated report"},
-                    self.validator
-                )
-
-        except Exception as e:
-            error_analysis = self._handle_error(e, query)
-            result["errors"].append(error_analysis)
-            
-        finally:
-            # Ensure final output collection
-            final_output = self._collect_final_output()
-            if final_output:
-                result["reports"].append({
-                    "agent": "ConsolidatedReport",
-                    "content": final_output,
-                    "status": "success"
-                })
-            
-        return result
-
-    def _continue_chat(self, agent, query):
-        """Continue conversation with next agent"""
-        self.user_proxy.send(
-            {"role": "user", "content": f"Continue analysis with {agent.name} for:\n```sql\n{query}\n```"},
-            agent,
-            request_reply=True
-        )
-
-    def _collect_final_output(self):
-        """Collect final output from conversation history"""
-        messages = self.user_proxy.chat_messages[self.validator]
-        return "\n".join([msg["content"] for msg in messages if msg["role"] == "assistant"])
-
-    def _init_agents(self):
-        """Initialize agents with ReAct planning capabilities"""
-        self.validator = AssistantAgent(
-            name="SQLValidatorAgent",
-            system_message="""
-            You are an expert SQL validator. Use ReAct framework for analysis:
-            Thought: Analyze query structure and potential issues
-            Action: validate_sql(query)
-            Observation: Received validation results
-            Thought: Determine next steps based on validation
-            Final Answer: Present validation report with recommendations
-            """,
-            llm_config=llm_config
-        )
-        
-        self.plan_analyzer = AssistantAgent(
-            name="ExecutionPlanAnalyzer",
-            system_message="""
-            You are a performance expert. Use ReAct framework:
-            Thought: Analyze execution plan for bottlenecks
-            Action: get_execution_plan(query)
-            Observation: Received execution plan data
-            Thought: Interpret results and identify optimizations
-            Final Answer: Present performance analysis report
-            """,
-            llm_config=llm_config
-        )
-        
-        self.data_profiler = AssistantAgent(
-            name="DataProfilerAgent",
-            system_message="""
-            You are a data quality analyst. Use ReAct framework:
-            Thought: Plan data profiling strategy
-            Action: profile_query_results(query)
-            Observation: Received profiling data
-            Thought: Analyze data characteristics
-            Final Answer: Present data quality report
-            """,
-            llm_config=llm_config
-        )
-
-        self.error_analyzer = AssistantAgent(
-            name="ErrorAnalyzerAgent",
-            system_message="""
-            You are an error diagnosis specialist. Use ReAct framework:
-            Thought: Analyze error context and query
-            Action: analyze_error(error, query)
-            Observation: Received error analysis
-            Thought: Develop solutions and recommendations
-            Final Answer: Present error analysis report
-            """,
-            llm_config=llm_config
-        )
-
-    def _register_tools(self):
-        """Register all database operations as tools"""
-        self.user_proxy.register_function(
-            function_map={
-                "validate_sql": self._validate_sql,
-                "get_execution_plan": self._get_execution_plan,
-                "profile_query_results": self._profile_query_results,
-                "analyze_error": self._analyze_error,
+        self.analyst = AssistantAgent(
+            name="SQLAnalyst",
+            system_message="""Analyze SQL errors and provide ONLY JSON responses with:
+            {
+                "hypothesis": "possible cause",
+                "validation_query": "SQL to test hypothesis",
+                "expected_result": "expected outcome",
+                "solution": "proposed fix"
+            }
+            No explanations or markdown. Keep responses minimal.""",
+            llm_config={
+                "config_list": [{
+                    "model": "llama-3.3-70b-versatile",
+                    "api_key": os.getenv("GROQ_API_KEY"),
+                    "api_type": "groq",
+                }],
+                "max_tokens": 300  # Enforce response size limit
             }
         )
-
-    def analyze_query(self, query: str, session_state) -> dict:
-        """Main analysis workflow using ReAct planning"""
-        result = {
-            "validation": {"status": "pending"},
-            "execution_plan": {},
-            "profiling": {},
-            "errors": [],
-            "analysis": []
-        }
-
+        
+        self.user_proxy = UserProxyAgent(
+            name="DebugController",
+            human_input_mode="NEVER",
+            max_consecutive_auto_reply=3,  # Limit conversation depth
+            code_execution_config=False,
+            function_map={
+                "execute_query": self.execute_query,
+                "validate_solution": self.validate_solution
+            }
+        )
+        
+    def execute_query(self, query: str) -> Dict[str, Any]:
+        """Execute SQL query with token-safe error handling"""
         try:
-            # Start with validation
-            self.user_proxy.initiate_chat(
-                self.validator,
-                message=f"Validate SQL query:\n```sql\n{query}\n```",
-                clear_history=True
-            )
-            val_result = self._process_chat(self.validator)
-            result["validation"] = val_result
-            result["analysis"].append(val_result)
-
-            # Proceed with execution plan analysis
-            self.user_proxy.initiate_chat(
-                self.plan_analyzer,
-                message=f"Analyze execution plan for:\n```sql\n{query}\n```",
-                clear_history=True
-            )
-            plan_result = self._process_chat(self.plan_analyzer)
-            result["execution_plan"] = plan_result
-            result["analysis"].append(plan_result)
-
-            # Perform data profiling
-            self.user_proxy.initiate_chat(
-                self.data_profiler,
-                message=f"Profile results for:\n```sql\n{query}\n```",
-                clear_history=True
-            )
-            profile_result = self._process_chat(self.data_profiler)
-            result["profiling"] = profile_result
-            result["analysis"].append(profile_result)
-
-        except Exception as e:
-            error_analysis = self._handle_error(e, query)
-            result["errors"].append(error_analysis)
-            result["analysis"].append(error_analysis)
-
-        return result
-
-    def _process_chat(self, agent) -> dict:
-        """Process agent chat history into structured result"""
-        messages = self.user_proxy.chat_messages[agent]
-        return {
-            "agent": agent.name,
-            "content": "\n".join([msg["content"] for msg in messages if msg["role"] == "assistant"]),
-            "status": "success"
-        }
-
-    def _validate_sql(self, query: str) -> str:
-        """Tool: Validate SQL query"""
-        try:
-            conn = self._get_db_connection()
-            with conn.cursor() as cursor:
-                cursor.execute(f"EXPLAIN {query}")
-                return "Syntax validation passed"
-        except mysql.connector.Error as e:
-            return f"Validation error: {str(e)}"
-        finally:
-            if conn: conn.close()
-
-    def _get_execution_plan(self, query: str) -> pd.DataFrame:
-        """Tool: Get execution plan"""
-        conn = self._get_db_connection()
-        try:
-            with conn.cursor() as cursor:
-                cursor.execute(f"EXPLAIN {query}")
-                plan = cursor.fetchall()
-                columns = [col[0] for col in cursor.description]
-                return pd.DataFrame(plan, columns=columns)
-        except mysql.connector.Error as e:
-            return f"Execution plan error: {str(e)}"
-        finally:
-            if conn: conn.close()
-
-    def _profile_query_results(self, query: str) -> Dict[str, Any]:
-        """Tool: Profile query results"""
-        conn = self._get_db_connection()
-        try:
-            with conn.cursor() as cursor:
-                cursor.execute(query)
-                data = cursor.fetchall()
-                columns = [col[0] for col in cursor.description]
-                df = pd.DataFrame(data, columns=columns)
+            with self.engine.connect() as conn:
+                result = conn.execute(text(query))
                 return {
-                    "stats": df.describe(),
-                    "sample": df.head(5),
-                    "null_counts": df.isnull().sum(),
-                    "duplicates": df.duplicated().sum()
+                    "success": True,
+                    "data": result.fetchmany(3),  # Limit data size
+                    "rowcount": result.rowcount
                 }
-        except mysql.connector.Error as e:
-            return f"Profiling error: {str(e)}"
-        finally:
-            if conn: conn.close()
-
-    def _analyze_error(self, error: Exception, query: str) -> str:
-        """Tool: Analyze database error"""
-        try:
-            self.user_proxy.initiate_chat(
-                self.error_analyzer,
-                message=f"Analyze error:\n{str(error)}\nQuery:\n{query}",
-                clear_history=True,
-                max_turns=1
-            )
-            return "\n".join([
-                msg["content"] for msg in self.user_proxy.chat_messages[self.error_analyzer]
-                if msg["role"] == "assistant"
-            ])
         except Exception as e:
-            return f"Error analysis failed: {str(e)}"
+            return {"success": False, "error": str(e).split('(Background')[0]}  # Trim verbose errors
 
-    def _handle_error(self, error: Exception, query: str) -> dict:
-        """Handle errors using error analyzer"""
+    def validate_solution(self, solution_query: str) -> Dict[str, Any]:
+        """Validate the proposed solution directly"""
+        result = self.execute_query(solution_query)
         return {
-            "agent": "ErrorAnalyzerAgent",
-            "content": self._analyze_error(error, query),
-            "status": "error"
+            "valid": result["success"],
+            "error": result.get("error"),
+            "sample_data": result.get("data")
         }
 
-    def _get_db_connection(self, retries=3):
-        """Database connection handler"""
-        for attempt in range(retries):
+    def debug_flow(self, query: str) -> Dict[str, Any]:
+        """Optimized debugging flow with token control"""
+        initial_result = self.execute_query(query)
+        if initial_result["success"]:
+            return {"status": "success", "result": initial_result}
+            
+        self.session.add_interaction("system", f"Error: {initial_result['error']}")
+        
+        while self.session.should_continue(self.session.history[-1]["content"]):
             try:
-                return mysql.connector.connect(
-                    host=os.getenv("DB_HOST", "localhost"),
-                    user=os.getenv("DB_USER", "root"),
-                    password=os.getenv("DB_PASSWORD", "FO@jan11"),
-                    database=os.getenv("DB_NAME", "company"),
-                    connect_timeout=5
+                response = self.user_proxy.initiate_chat(
+                    self.analyst,
+                    message=self.session.history[-1]["content"],
+                    clear_history=True  # Prevent context bloat
                 )
-            except mysql.connector.Error as e:
-                logger.error(f"Connection attempt {attempt+1} failed: {e}")
-                time.sleep(2)
-        raise ConnectionError("Failed to establish database connection")
+                last_msg = response.chat_history[-1]["content"]
+                
+                # Extract JSON without verbose parsing
+                action = self._extract_json(last_msg)
+                if not action:
+                    break
 
+                # Direct solution validation
+                if "solution" in action:
+                    validation = self.validate_solution(action["solution"])
+                    if validation["valid"]:
+                        self.session.resolved = True
+                        return {
+                            "status": "resolved",
+                            "solution": action["solution"],
+                            "validation": validation
+                        }
+                        
+                self.session.add_interaction("assistant", json.dumps(action))
+                
+            except Exception as e:
+                break
+                
+        return {"status": "unresolved", "history": self.session.history}
+
+    def _extract_json(self, response: str) -> Dict[str, Any]:
+        """Efficient JSON extraction without regex"""
+        try:
+            start = response.index('{')
+            end = response.rindex('}') + 1
+            return json.loads(response[start:end])
+        except (ValueError, json.JSONDecodeError):
+            return None
+
+# Streamlit interface
 def main():
-    st.set_page_config(page_title="SQL Analyzer", page_icon="🔍", layout="wide")
-    st.title("AI-Powered SQL Query Analyzer")
+    st.title("SQL Debugging Assistant")
+    query = st.text_area("Enter SQL query:", height=150)
     
-    analysis_system = SQLAnalysisSystem()
-    query = st.text_area("Enter SQL Query:", height=150, placeholder="SELECT * FROM table_name;")
-    
-    if st.button("Analyze Query"):
-        with st.spinner("Analyzing with AI agents..."):
-            result = analysis_system.analyze_query(query, st.session_state)
-            
-            st.subheader("Analysis Report")
-            for analysis in result["analysis"]:
-                with st.expander(f"{analysis['agent']} Report", expanded=True):
-                    if analysis["status"] == "error":
-                        st.error(analysis["content"])
-                    else:
-                        st.markdown(analysis["content"])
-            
-            if result["errors"]:
-                st.error("Processing Errors:")
-                for error in result["errors"]:
-                    st.error(error)
+    if st.button("Debug"):
+        debugger = SQLDebugger()
+        result = debugger.debug_flow(query)
+        
+        st.subheader("Results")
+        if result["status"] == "resolved":
+            st.success("✅ Solution Found")
+            st.code(result["solution"], language="sql")
+        else:
+            st.error("❌ Resolution Failed")
+            with st.expander("Debug Logs"):
+                st.json(result.get("history", []))
 
 if __name__ == "__main__":
     main()
